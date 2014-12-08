@@ -1586,7 +1586,58 @@ cc.Loader.preload = function (resources, selector, target) {
     return this._instance;
 };
 
-cc.LoaderScene = cc.Loader;
+cc.Loader.preload = runtime.preload;
+cc.LoaderScene = cc.Scene.extend({
+    _label: null,
+    _groupname: null,
+    _callback: null,
+    _selector: null,
+    ctor: function (groupname, callback, target) {
+        this._super();
+        this.updateGroup(groupname, callback, target);
+        this.init();
+    },
+
+    updateGroup: function(groupname, callback, target) {
+        this._groupname = groupname;
+        this._callback = callback;
+        this._selector = target;
+    },
+
+    init: function () {
+        var self = this;
+        //logo
+        var logoHeight = 200;
+        var bgLayer = self._bgLayer = new cc.LayerColor(cc.color(32, 32, 32, 255));
+        bgLayer.setPosition(cc.visibleRect.bottomLeft);
+        self.addChild(bgLayer, 0);
+        var label = self._label = new cc.LabelTTF("Loading... 0%", "Arial", 18);
+        label.setPosition(cc.pAdd(cc.visibleRect.center, cc.p(0, 0)));
+        label.setColor(cc.color(180, 180, 180));
+        bgLayer.addChild(this._label, 10);
+        return true;
+    },
+    _preloadSource: function () {
+        cc.Loader.preload(this._groupname, this._preload, this);
+    },
+    _preload: function (isFinish, percent) {
+        this._label.setString("Loading..." + percent.toFixed(1) + "%");
+        if (isFinish) {
+            this._callback.call(this._target);
+        }
+    }
+});
+cc.LoaderScene.preload = function (groupname, callback, target) {
+    if (this._instance == null) {
+        this._instance = new cc.LoaderScene(groupname, callback, target);
+        this._instance.retain();
+    }
+
+    this._instance.updateGroup(groupname, callback, target);
+
+    this._instance._preloadSource();
+    cc.director.runScene(this._instance);
+}
 
 var ConfigType = {
     NONE: 0,
