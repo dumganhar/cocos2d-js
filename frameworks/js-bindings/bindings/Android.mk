@@ -17,6 +17,7 @@ LOCAL_SRC_FILES := auto/jsb_cocos2dx_auto.cpp \
                    manual/js_manual_conversions.cpp \
                    manual/js_bindings_core.cpp \
                    manual/js_bindings_opengl.cpp \
+                   manual/js_bindings_loader.cpp \
                    manual/jsb_opengl_functions.cpp \
                    manual/jsb_opengl_manual.cpp \
                    manual/jsb_opengl_registration.cpp \

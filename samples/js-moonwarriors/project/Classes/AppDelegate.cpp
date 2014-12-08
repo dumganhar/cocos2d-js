@@ -16,6 +16,7 @@
 #include "ui/jsb_cocos2dx_ui_manual.h"
 #include "cocostudio/jsb_cocos2dx_studio_manual.h"
 #include "jsb_cocos2dx_studio_auto.hpp"
+#include "js_bindings_loader.h"
 
 USING_NS_CC;
 using namespace CocosDenshion;
@@ -63,6 +64,9 @@ bool AppDelegate::applicationDidFinishLaunching()
     sc->addRegisterCallback(register_all_cocos2dx_ui_manual);
     sc->addRegisterCallback(register_all_cocos2dx_studio);
     sc->addRegisterCallback(register_all_cocos2dx_studio_manual);
+    sc->addRegisterCallback(jsb_register_preloadSource);
+    
+    FileUtils::getInstance()->addSearchPath("group");
     
     sc->start();
     sc->runScript("script/jsb_boot.js");
