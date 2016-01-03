@@ -96,8 +96,12 @@ public:
         if (data.isBinary)
         {// data is binary
             JSObject* buffer = JS_NewArrayBuffer(cx, static_cast<uint32_t>(data.len));
-            uint8_t* bufdata = JS_GetArrayBufferData(buffer);
-            memcpy((void*)bufdata, (void*)data.bytes, data.len);
+            if (data.len > 0)
+            {
+                uint8_t* bufdata = JS_GetArrayBufferData(buffer);
+                memcpy((void*)bufdata, (void*)data.bytes, data.len);
+            }
+
             JS::RootedValue dataVal(cx);
             dataVal = OBJECT_TO_JSVAL(buffer);
             JS_SetProperty(cx, jsobj, "data", dataVal);
@@ -105,7 +109,21 @@ public:
         else
         {// data is string
             JS::RootedValue dataVal(cx);
-            dataVal = c_string_to_jsval(cx, data.bytes);
+            if (strlen(data.bytes) == 0 && data.len > 0)
+            {// String with 0x00 prefix
+                dataVal = STRING_TO_JSVAL(JS_NewStringCopyN(cx, data.bytes, data.len));
+            }
+            else
+            {// Normal string
+                dataVal = c_string_to_jsval(cx, data.bytes);
+            }
+            
+            if (dataVal.isNullOrUndefined())
+            {
+                ws->close();
+                return;
+            }
+            
             JS_SetProperty(cx, jsobj, "data", dataVal);
         }
 
@@ -131,7 +149,11 @@ public:
         js_proxy_t* jsproxy = jsb_get_js_proxy(p->obj);
         JS_RemoveObjectRoot(cx, &jsproxy->obj);
         jsb_remove_proxy(p, jsproxy);
+
+        // Delete WebSocket instance
         CC_SAFE_DELETE(ws);
+        // Delete self at last while websocket was closed.
+        delete this;
     }
     
     virtual void onError(WebSocket* ws, const WebSocket::ErrorCode& error)
@@ -175,45 +197,49 @@ bool js_cocos2dx_extension_WebSocket_send(JSContext *cx, uint32_t argc, jsval *v
     WebSocket* cobj = (WebSocket *)(proxy ? proxy->ptr : NULL);
     JSB_PRECONDITION2( cobj, cx, false, "Invalid Native Object");
 
-    if(argc == 1){
-        do
+    if(argc == 1)
+    {
+        if (JSVAL_IS_STRING(argv[0]))
         {
-            if (JSVAL_IS_STRING(argv[0]))
+            ssize_t len = JS_GetStringLength(argv[0].toString());
+            std::string data;
+            jsval_to_std_string(cx, argv[0], &data);
+            
+            if (data.empty() && len > 0)
             {
-                std::string data;
-                jsval_to_std_string(cx, argv[0], &data);
-                cobj->send(data);
-                break;
+                CCLOGWARN("Text message to send is empty, but its length is greater than 0!");
+                //FIXME: Note that this text message contains '0x00' prefix, so its length calcuted by strlen is 0.
+                // we need to fix that if there is '0x00' in text message,
+                // since javascript language could support '0x00' inserted at the beginning or the middle of text message
             }
 
-            if (argv[0].isObject())
+            cobj->send(data);
+        }
+        else if (argv[0].isObject())
+        {
+            uint8_t *bufdata = NULL;
+            uint32_t len = 0;
+            
+            JSObject* jsobj = JSVAL_TO_OBJECT(argv[0]);
+            if (JS_IsArrayBufferObject(jsobj))
             {
-                uint8_t *bufdata = NULL;
-                uint32_t len = 0;
-                
-                JSObject* jsobj = JSVAL_TO_OBJECT(argv[0]);
-                if (JS_IsArrayBufferObject(jsobj))
-                {
-                    bufdata = JS_GetArrayBufferData(jsobj);
-                    len = JS_GetArrayBufferByteLength(jsobj);
-                }
-                else if (JS_IsArrayBufferViewObject(jsobj))
-                {
-                    bufdata = (uint8_t*)JS_GetArrayBufferViewData(jsobj);
-                    len = JS_GetArrayBufferViewByteLength(jsobj);
-                }
-                
-                if (bufdata && len > 0)
-                {
-                    cobj->send(bufdata, len);
-                    break;
-                }
+                bufdata = JS_GetArrayBufferData(jsobj);
+                len = JS_GetArrayBufferByteLength(jsobj);
+            }
+            else if (JS_IsArrayBufferViewObject(jsobj))
+            {
+                bufdata = (uint8_t*)JS_GetArrayBufferViewData(jsobj);
+                len = JS_GetArrayBufferViewByteLength(jsobj);
             }
             
+            cobj->send(bufdata, len);
+        }
+        else
+        {
             JS_ReportError(cx, "data type to be sent is unsupported.");
+            return false;
+        }
 
-        } while (0);
-        
         JS_SET_RVAL(cx, vp, JSVAL_VOID);
 
         return true;

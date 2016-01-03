@@ -1671,6 +1671,8 @@ jsval c_string_to_jsval(JSContext* cx, const char* v, size_t length /* = -1 */)
             ret = STRING_TO_JSVAL(str);
         }
         delete[] strUTF16;
+    } else {
+        CCLOGERROR("Could not decode a text frame as UTF-8.");
     }
     return ret;
 }
