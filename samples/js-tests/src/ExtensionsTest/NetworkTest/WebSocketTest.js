@@ -27,7 +27,7 @@
 
 var WebSocket = WebSocket || window.WebSocket || window.MozWebSocket; 
 
-var WebSocketTestLayer = cc.Layer.extend({
+var WebSocketTestLayer111 = cc.Layer.extend({
 
     _wsiSendText: null,
     _wsiSendBinary: null,
@@ -245,6 +245,189 @@ var WebSocketTestLayer = cc.Layer.extend({
         var scene = new ExtensionsTestScene();
         scene.runThisTest();
     }
+});
+var winSize = cc.director.getWinSize();
+
+var WebSocketTestLayer = cc.Layer.extend({
+
+    init: function() {
+        var wsuri = null;
+        var port = null;
+        var agent = null;
+        var ua = null;
+        var webSocket = null;
+        var currentCaseId = null;
+        var caseCount = 280;
+
+        var labelStatus = new cc.LabelTTF("测试未开始", "Arial", 22);
+        labelStatus.x = winSize.width/2;
+        labelStatus.y = winSize.height/2;
+        this.addChild(labelStatus);
+
+        cc.log("labelStatus:" + labelStatus);
+
+        function setWsUri()
+        {
+            if (wsuri == null || wsuri == "")
+            {
+                var hn = null;//window.location.hostname;
+                if (hn == null || hn == "") {
+                    hn = "127.0.0.1";
+                }
+                wsuri = "ws://" + hn + ":9001";
+            }
+        }
+
+        function setPort()
+        {
+            if (port == null || port == "")
+            {
+                port = "9001";
+            }
+        }
+
+        function setAgent()
+        {
+            agent = "cocos2d-websocket-client";
+        }
+
+        function startTestRun()
+        {
+            setWsUri();
+            setAgent();
+            updateStatus("Running test suite ..");
+            currentCaseId = 1;
+//           runNextCase();
+            getCaseCount(runNextCase);
+        }
+
+        function updateStatus(msg)
+        {
+            cc.log("updateStatus:" + msg);
+            labelStatus.setString(msg);
+        }
+
+        function openWebSocket(ws_uri)
+        {
+            return new WebSocket(ws_uri);
+        }
+
+        function getCaseCount(cont)
+        {
+            var ws_uri = wsuri + "/getCaseCount";
+
+            cc.log("getCaseCount, ws_uri=" + ws_uri);
+            webSocket = openWebSocket(ws_uri);
+
+            webSocket.onopen = function() {
+                cc.log("getCaseCount, onopen ...");
+            };
+
+            webSocket.onmessage = function(e)
+            {
+                cc.log("case count:" + e.data);
+                caseCount = JSON.parse(e.data);
+                updateStatus("Will run " + caseCount + " cases ..");
+            };
+
+            webSocket.onclose = function(e)
+            {
+                cc.log("getCaseCount onclose:" + e.type);
+                cont();
+            };
+
+            webSocket.onerror = function(e) {
+                cc.log("getCaseCount onerror:" + e.type);
+            };
+        }
+
+        function updateReports()
+        {
+            cc.log("===========================================");
+
+            var ws_uri = wsuri + "/updateReports?agent=" + agent;
+
+            webSocket = openWebSocket(ws_uri);
+
+            webSocket.onopen =
+                function(e)
+            {
+                updateStatus("Updating reports ..");
+            };
+
+            webSocket.onclose =
+                function(e)
+            {
+                webSocket = null;
+                updateStatus("Reports updated.");
+                updateStatus("Test suite finished!");
+
+                /*document.getElementById('resultlink').innerHTML = '<a href="../reports/clients/index.html">Check test report</a>';*/
+            };
+        }
+
+        function runNextCase()
+        {
+            var ws_uri = wsuri + "/runCase?case=" + currentCaseId + "&agent=" + agent;
+
+            webSocket = openWebSocket(ws_uri);
+            webSocket.binaryType = "arraybuffer";
+
+            webSocket.onopen =
+                function(e)
+            {
+                cc.log("====> onopen: ");
+                updateStatus("Executing test case " + currentCaseId + "/" + caseCount);
+            };
+
+            webSocket.onclose =
+                function(e)
+            {
+                cc.log("====> onclose: ");
+                webSocket = null;
+
+                currentCaseId = currentCaseId + 1;
+                if (currentCaseId <= caseCount)
+                {
+                    runNextCase();
+                }
+                else
+                {
+//                    currentCaseId = 1;
+//                    runNextCase();
+                    updateStatus("All test cases executed.");
+                    updateReports();
+                }
+            };
+
+            //webSocket.onerror = webSocket.onclose;
+
+            webSocket.onmessage =
+                function(e)
+            {
+                if (e.data)
+                {
+                    if (e.data instanceof ArrayBuffer) {
+                        cc.log("====> binary onmessage: " + ", len:" + (e.data ? e.data.byteLength : 0));
+                    } else if (typeof(e.data) === "string") {
+                        cc.log("====> string onmessage: " + ", len:" + (e.data ? e.data.length : 0));
+                    } else {
+                        cc.log("====> onmessage unknown type ..." + typeof(e.data));
+                    }
+                } else {
+                    cc.log("====> onmessage e.data is null");
+                }
+                webSocket.send(e.data);
+            };
+
+            cc.log("===========================================");
+        };
+
+        startTestRun();
+
+        return true;
+    }
+
 });
 
 WebSocketTestLayer.create = function () {
